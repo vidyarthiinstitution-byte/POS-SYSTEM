@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Palash Shopping Mall POS</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+</head>
+
+<body>
+
+<h1>Palash Shopping Mall</h1>
+
+<!-- PRODUCT -->
+<h3>Add Product</h3>
+
+<select id="ptype">
+<option value="">Category</option>
+<option>Jewellery</option>
+<option>Cosmetics</option>
+<option>Clothes</option>
+<option>Books</option>
+<option>Toys</option>
+</select>
+
+<div id="dynamicFields"></div>
+
+<button onclick="addProduct()">Add Product</button>
+<button onclick="viewStock()">View Stock</button>
+
+<hr>
+
+<!-- CUSTOMER -->
+<h3>Customer</h3>
+
+<input id="customer" placeholder="Name">
+<input id="mobile" placeholder="Mobile" oninput="validateMobile()">
+<span id="mobileError" style="color:red;"></span>
+
+<hr>
+
+<!-- BILLING -->
+<h3>Billing</h3>
+
+<select id="filterType" onchange="filterProducts()">
+<option value="">All</option>
+<option>Jewellery</option>
+<option>Cosmetics</option>
+<option>Clothes</option>
+<option>Books</option>
+<option>Toys</option>
+</select>
+
+<input id="search" placeholder="Search / Shortcode" onkeyup="filterProducts()">
+
+<select id="productSelect"></select>
+<input id="qty" type="number" placeholder="Qty">
+
+<button onclick="addItem()">Add Item</button>
+<button onclick="saveBill()">Save Bill</button>
+<button onclick="resetBill()">New Bill</button>
+
+<hr>
+
+<p><b>Bill No:</b> <span id="billNo"></span></p>
+<p><b>Date:</b> <span id="date"></span></p>
+<p><b>Time:</b> <span id="time"></span></p>
+
+<table border="1" id="billTable">
+<tr>
+<th>Category</th>
+<th>Name</th>
+<th>Qty</th>
+<th>MRP</th>
+<th>Price</th>
+<th>Total</th>
+<th>Action</th>
+</tr>
+</table>
+
+<h2>Total ₹<span id="total">0</span></h2>
+
+<button onclick="sendWhatsApp()">WhatsApp</button>
+<button onclick="downloadPDF()">PDF</button>
+<button onclick="viewReport()">Report</button>
+
+<hr>
+
+<ul id="report"></ul>
+
+<!-- ✅ SEARCH BILL UI (CORRECT PLACE) -->
+<hr>
+<h3>Search Bill</h3>
+<input id="searchBill" placeholder="Enter Bill No / Mobile">
+<button onclick="searchBill()">Search</button>
+<ul id="billResults"></ul>
+
+<hr>
+
+<h3>📊 Profit Dashboard</h3>
+
+<button onclick="showDashboard()">Show Dashboard</button>
+
+<div id="dashboard" style="margin-top:10px;"></div>
+<script>
+
+// ===== DOM =====
+const ptype = document.getElementById("ptype");
+const productSelect = document.getElementById("productSelect");
+const filterType = document.getElementById("filterType");
+const search = document.getElementById("search");
+const billTable = document.getElementById("billTable");
+const customer = document.getElementById("customer");
+const mobile = document.getElementById("mobile");
+
+const billNoEl=document.getElementById("billNo");
+const dateEl=document.getElementById("date");
+const timeEl=document.getElementById("time");
+const totalEl=document.getElementById("total");
+
+// ===== INIT =====
+window.onload=function(){
+initBill();
+filterProducts();
+renderFields();
+};
+
+ptype.addEventListener("change", renderFields);
+
+// ===== GLOBAL =====
+let total=0;
+let currentItems=[];
+
+// ===== DYNAMIC FIELDS =====
+function renderFields(){
+
+let type=ptype.value;
+let div=document.getElementById("dynamicFields");
+
+if(type==="Books"){
+div.innerHTML=`
+<input id="pname" placeholder="Book Name">
+<input id="author" placeholder="Author">
+<input id="publication" placeholder="Publication">
+<input id="isbn" placeholder="ISBN">
+<input id="shortcode" placeholder="Short Code">
+<input id="pmrp" type="number" placeholder="MRP">
+<input id="pprice" type="number" placeholder="Price">
+<input id="pstock" type="number" placeholder="Quantity">
+`;
+}else{
+div.innerHTML=`
+<input id="pname" placeholder="Product Name">
+<input id="shortcode" placeholder="Short Code">
+<input id="pmrp" type="number" placeholder="MRP">
+<input id="pprice" type="number" placeholder="Price">
+<input id="pstock" type="number" placeholder="Stock">
+`;
+}
+}
+
+// ===== MOBILE VALIDATION =====
+function validateMobile(){
+let m=mobile.value;
+let err=document.getElementById("mobileError");
+
+if(m && !/^[0-9]*$/.test(m)){
+mobile.value=m.replace(/\D/g,'');
+return;
+}
+
+if(m.length!==10){
+err.innerText="Mobile must be 10 digits";
+}else{
+err.innerText="";
+}
+}
+
+// ===== BILL NUMBER =====
+function generateBillNo(){
+let d=new Date();
+
+let key=
+String(d.getFullYear()).slice(2)+
+String(d.getMonth()+1).padStart(2,'0')+
+String(d.getDate()).padStart(2,'0');
+
+let data=JSON.parse(localStorage.getItem("billCounter"))||{};
+
+if(data.date===key){
+data.count++;
+}else{
+data={date:key,count:1};
+}
+
+localStorage.setItem("billCounter",JSON.stringify(data));
+
+return key+String(data.count).padStart(3,'0');
+}
+
+// ===== INIT BILL =====
+function initBill(){
+let now=new Date();
+
+billNoEl.innerText=generateBillNo();
+dateEl.innerText=now.toLocaleDateString();
+timeEl.innerText=now.toLocaleTimeString();
+}
+
+// ===== ADD PRODUCT =====
+function addProduct(){
+
+let type=ptype.value;
+
+let p={
+type:type,
+name:document.getElementById("pname")?.value.trim(),
+shortcode: document.getElementById("shortcode")?.value?.toLowerCase(),
+mrp:+document.getElementById("pmrp")?.value,
+price:+document.getElementById("pprice")?.value,
+stock:+document.getElementById("pstock")?.value
+};
+
+if(type==="Books"){
+p.author=document.getElementById("author")?.value || "";
+p.publication=document.getElementById("publication")?.value || "";
+p.isbn=document.getElementById("isbn")?.value || "";
+}
+
+if(!p.type || !p.name || p.price<=0 || p.stock<=0){
+alert("Fill all fields properly");
+return;
+}
+
+let products=JSON.parse(localStorage.getItem("products"))||[];
+
+let exists=products.some(prod =>
+prod.name.toLowerCase()===p.name.toLowerCase() ||
+(prod.shortcode && prod.shortcode===p.shortcode)
+);
+
+if(exists){
+alert("Product already exists");
+return;
+}
+
+products.push(p);
+localStorage.setItem("products",JSON.stringify(products));
+
+renderFields();
+ptype.value="";
+filterProducts();
+
+alert("Product Added Successfully");
+}
+
+// ===== VIEW STOCK =====
+function viewStock(){
+
+let products=JSON.parse(localStorage.getItem("products"))||[];
+
+let report={};
+
+products.forEach(p=>{
+if(!report[p.type]) report[p.type]=0;
+report[p.type]+=p.stock;
+});
+
+let msg="Stock Category Wise:\n\n";
+
+for(let k in report){
+msg+=k+" : "+report[k]+"\n";
+}
+
+alert(msg);
+}
+
+// ===== FILTER =====
+function filterProducts(){
+
+let products=JSON.parse(localStorage.getItem("products"))||[];
+
+let type=filterType.value;
+let s=search.value.toLowerCase();
+
+productSelect.innerHTML="";
+
+let filtered=products.filter(p=>
+(!type||p.type===type)&&
+(!s ||
+p.name.toLowerCase().includes(s) ||
+(p.shortcode && p.shortcode.includes(s)) ||
+(p.isbn && p.isbn.toLowerCase().includes(s))
+)
+);
+
+window.filteredProducts=filtered;
+
+filtered.forEach((p,i)=>{
+let op=document.createElement("option");
+op.value=i;
+op.innerText = p.type==="Books"
+? `${p.name} | ${p.author || ""} | ₹${p.price} (Stock:${p.stock})`
+: `${p.name} | ${p.shortcode || ""} ₹${p.price} (Stock:${p.stock})`;
+productSelect.appendChild(op);
+});
+}
+
+// ===== ADD ITEM =====
+function addItem(){
+
+let name=customer.value.trim();
+let mob=mobile.value;
+
+if(!name){ alert("Customer name required"); return; }
+if(mob.length!==10){ alert("Mobile must be 10 digits"); return; }
+
+let p=window.filteredProducts[productSelect.value];
+let qty=+document.getElementById("qty").value;
+
+if(!p || qty<=0){ alert("Enter valid quantity"); return; }
+if(qty>p.stock){ alert("Not enough stock"); return; }
+
+let t=qty*p.price;
+
+let row=billTable.insertRow();
+
+row.innerHTML=`
+<td>${p.type}</td>
+<td>${p.name}</td>
+<td>${qty}</td>
+<td>${p.mrp}</td>
+<td>${p.price}</td>
+<td>${t}</td>
+<td><button onclick="deleteItem(this,'${p.name}',${t})">Delete</button></td>
+`;
+
+total+=t;
+totalEl.innerText=total;
+
+currentItems.push({...p,qty,itemTotal:t});
+
+document.getElementById("qty").value="";
+}
+
+// ===== DELETE =====
+function deleteItem(btn,name,amount){
+let row=btn.parentElement.parentElement;
+total-=amount;
+totalEl.innerText=total;
+currentItems=currentItems.filter(i=>!(i.name===name&&i.itemTotal===amount));
+row.remove();
+}
+
+// ===== RESET =====
+function resetBill(){
+total=0;
+currentItems=[];
+totalEl.innerText="0";
+
+customer.value="";
+mobile.value="";
+document.getElementById("mobileError").innerText="";
+
+billTable.innerHTML=`
+<tr>
+<th>Category</th>
+<th>Name</th>
+<th>Qty</th>
+<th>MRP</th>
+<th>Price</th>
+<th>Total</th>
+<th>Action</th>
+</tr>
+`;
+
+initBill();
+}
+
+// ===== SAVE =====
+function saveBill(){
+
+let name=customer.value.trim();
+let mob=mobile.value;
+
+if(!name){ alert("Customer name required"); return; }
+if(mob.length!==10){ alert("Enter valid mobile"); return; }
+if(currentItems.length===0){ alert("No items"); return; }
+
+let bills=JSON.parse(localStorage.getItem("bills"))||[];
+
+let billData={
+billNo: billNoEl.innerText,
+date: dateEl.innerText,
+time: timeEl.innerText,
+customer: name,
+mobile: mob,
+items: currentItems,
+total: total
+};
+
+let index=bills.findIndex(b=>b.billNo===billData.billNo);
+
+if(index>-1){
+bills[index]=billData;
+}else{
+bills.push(billData);
+}
+
+localStorage.setItem("bills",JSON.stringify(bills));
+
+alert("Bill Saved");
+}
+
+// ===== SEARCH BILL =====
+function searchBill(){
+
+let q=document.getElementById("searchBill").value.toLowerCase();
+
+let bills=JSON.parse(localStorage.getItem("bills"))||[];
+let list=document.getElementById("billResults");
+
+list.innerHTML="";
+
+let filtered=bills.filter(b=>
+b.billNo.toLowerCase().includes(q) ||
+b.mobile.includes(q)
+);
+
+filtered.forEach((b,i)=>{
+let li=document.createElement("li");
+li.innerHTML=`
+Bill: ${b.billNo} | ${b.customer} | ₹${b.total}
+<button onclick="openBill(${i})">Open</button>
+`;
+list.appendChild(li);
+});
+}
+
+// ===== OPEN BILL =====
+function openBill(index){
+
+let bills=JSON.parse(localStorage.getItem("bills"))||[];
+let b=bills[index];
+
+resetBill();
+
+billNoEl.innerText=b.billNo;
+dateEl.innerText=b.date;
+timeEl.innerText=b.time;
+
+customer.value=b.customer;
+mobile.value=b.mobile;
+
+total=0;
+currentItems=[];
+
+b.items.forEach(item=>{
+let row=billTable.insertRow();
+row.innerHTML=`
+<td>${item.type}</td>
+<td>${item.name}</td>
+<td>${item.qty}</td>
+<td>${item.mrp}</td>
+<td>${item.price}</td>
+<td>${item.itemTotal}</td>
+<td><button onclick="deleteItem(this,'${item.name}',${item.itemTotal})">Delete</button></td>
+`;
+
+total+=item.itemTotal;
+currentItems.push(item);
+});
+
+totalEl.innerText=total;
+}
+
+// ===== PDF =====
+function downloadPDF(){
+const {jsPDF}=window.jspdf;
+let doc=new jsPDF();
+doc.text("Palash Shopping Mall",10,10);
+doc.text("Bill: "+billNoEl.innerText,10,20);
+doc.text("Total ₹"+total,10,30);
+doc.save("invoice.pdf");
+}
+
+// ===== WHATSAPP =====
+function sendWhatsApp(){
+window.open("https://wa.me/91"+mobile.value);
+}
+
+// ===== REPORT =====
+function viewReport(){
+alert("Basic report working");
+}
+
+function showDashboard(){
+
+let bills=JSON.parse(localStorage.getItem("bills"))||[];
+
+let totalSales=0;
+let totalProfit=0;
+let totalQty=0;
+
+let today=new Date().toLocaleDateString();
+
+let todaySales=0;
+let todayProfit=0;
+
+bills.forEach(b=>{
+
+totalSales+=b.total;
+
+if(b.date===today){
+todaySales+=b.total;
+}
+
+b.items.forEach(i=>{
+
+totalQty+=i.qty;
+
+// profit = selling price - mrp (approx cost)
+let profit=(i.price - i.mrp) * i.qty;
+
+totalProfit+=profit;
+
+if(b.date===today){
+todayProfit+=profit;
+}
+
+});
+
+});
+
+let div=document.getElementById("dashboard");
+
+div.innerHTML=`
+<h4>Total Sales: ₹${totalSales}</h4>
+<h4>Total Profit: ₹${totalProfit}</h4>
+<h4>Total Items Sold: ${totalQty}</h4>
+<hr>
+<h4>Today Sales: ₹${todaySales}</h4>
+<h4>Today Profit: ₹${todayProfit}</h4>
+`;
+}
+
+</script>
+
+
+
+</body>
+</html>
