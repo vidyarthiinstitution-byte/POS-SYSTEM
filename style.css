@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Palash Billing</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<h1>Palash Billing System</h1>
+
+<input type="number" id="qty" placeholder="Quantity">
+<input type="text" id="product" placeholder="Product Name">
+<input type="text" id="desc" placeholder="Description (optional)">
+<input type="number" id="mrp" placeholder="MRP">
+<input type="number" id="price" placeholder="Discounted Price">
+
+<button onclick="addItem()">Add Item</button>
+
+<ul id="list"></ul>
+
+<h2>Total: ₹<span id="total">0</span></h2>
+
+<script>
+let total = 0;
+
+function addItem() {
+  let qty = parseInt(document.getElementById("qty").value) || 0;
+  let product = document.getElementById("product").value;
+  let desc = document.getElementById("desc").value;
+  let mrp = parseFloat(document.getElementById("mrp").value) || 0;
+  let price = parseFloat(document.getElementById("price").value) || 0;
+
+  if(qty > 0 && product && price > 0) {
+    let itemTotal = qty * price;
+
+    let li = document.createElement("li");
+    li.innerText = 
+      product + 
+      " | Qty: " + qty + 
+      " | ₹" + price + 
+      " | Total: ₹" + itemTotal;
+
+    document.getElementById("list").appendChild(li);
+
+    total += itemTotal;
+    document.getElementById("total").innerText = total;
+
+    // 👉 CLEAR INPUT FIELDS
+    document.getElementById("qty").value = "";
+    document.getElementById("product").value = "";
+    document.getElementById("desc").value = "";
+    document.getElementById("mrp").value = "";
+    document.getElementById("price").value = "";
+  }
+}
+</script>
+
+</body>
+</html>
